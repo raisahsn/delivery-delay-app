@@ -80,11 +80,17 @@ class TestPredictDelay:
         result = predict_delay(dummy_pipeline, valid_input_row)
         assert result.risk_level in {"Low", "Medium", "High"}
 
-    def test_high_risk_scenario_probability_higher_than_low_risk(self, dummy_pipeline, valid_input_row):
+    def test_high_risk_probability_higher_than_low_risk(
+        self, dummy_pipeline, valid_input_row
+    ):
         # storm + express (per synthetic rule in conftest) should score
         # meaningfully higher than clear weather + standard mode.
-        high_risk = dict(valid_input_row, weather_condition="stormy", delivery_mode="express")
-        low_risk = dict(valid_input_row, weather_condition="clear", delivery_mode="standard")
+        high_risk = dict(
+            valid_input_row, weather_condition="stormy", delivery_mode="express"
+        )
+        low_risk = dict(
+            valid_input_row, weather_condition="clear", delivery_mode="standard"
+        )
 
         high_result = predict_delay(dummy_pipeline, high_risk)
         low_result = predict_delay(dummy_pipeline, low_risk)
@@ -103,7 +109,11 @@ class TestPredictDelay:
         extra = dict(valid_input_row, delivery_status="delivered", delivery_rating=5)
         result = predict_delay(dummy_pipeline, extra)
         assert isinstance(result, PredictionResult)
-        assert set(ALL_FEATURES).issubset(set(valid_input_row.keys()) | {"delivery_status", "delivery_rating"})
+        allowed_keys = set(valid_input_row.keys()) | {
+            "delivery_status",
+            "delivery_rating",
+        }
+        assert set(ALL_FEATURES).issubset(allowed_keys)
 
 
 class TestFeatureImportance:
