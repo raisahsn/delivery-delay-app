@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+*.csv
+.DS_Store
+.idea/
+.vscode/
+
+# model/model.pkl and model/config.json ARE tracked (via Git LFS, see
+# .gitattributes) so CI/CD can build a self-contained Docker image.
+# Raw training data stays out of git regardless (see *.csv above).

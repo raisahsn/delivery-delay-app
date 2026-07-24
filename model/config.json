@@ -1,0 +1,36 @@
+{
+  "task": "delivery_delay_prediction",
+  "target": "delayed_flag (1 = terlambat, 0 = tepat waktu)",
+  "model_type": "Logistic Regression",
+  "best_params": {
+    "penalty": "l2",
+    "C": 0.5
+  },
+  "numeric_features": [
+    "distance_km",
+    "package_weight_kg",
+    "expected_time_hours",
+    "delivery_cost"
+  ],
+  "categorical_features": [
+    "delivery_partner",
+    "package_type",
+    "vehicle_type",
+    "delivery_mode",
+    "region",
+    "weather_condition"
+  ],
+  "cv_roc_auc": 0.9680433141152083,
+  "test_metrics": {
+    "accuracy": 0.893,
+    "precision": 0.7939661515820456,
+    "recall": 0.8088455772113943,
+    "f1": 0.8013367991088006,
+    "roc_auc": 0.9669177277155203
+  },
+  "trained_at": "2026-07-18T22:19:15",
+  "sklearn_pipeline_steps": [
+    "prep",
+    "clf"
+  ]
+}

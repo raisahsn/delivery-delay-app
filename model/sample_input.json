@@ -1,0 +1,12 @@
+{
+  "distance_km": 114.2,
+  "package_weight_kg": 27.13,
+  "expected_time_hours": 16,
+  "delivery_cost": 652.39,
+  "delivery_partner": "amazon logistics",
+  "package_type": "groceries",
+  "vehicle_type": "truck",
+  "delivery_mode": "two day",
+  "region": "east",
+  "weather_condition": "hot"
+}

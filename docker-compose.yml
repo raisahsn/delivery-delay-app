@@ -1,0 +1,13 @@
+services:
+  delivery-delay-app:
+    build: .
+    image: delivery-delay-app:local
+    container_name: delivery-delay-app
+    environment:
+      - PORT=8501
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mount model/ from host so you can retrain and refresh without rebuilding the image
+      - ./model:/app/model:ro
+    restart: unless-stopped
