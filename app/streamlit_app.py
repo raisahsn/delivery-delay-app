@@ -20,13 +20,6 @@ import streamlit as st
 # Agar bisa dijalankan langsung via `streamlit run app/streamlit_app.py`
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from app.db_utils import (  # noqa: E402
-    db_available,
-    get_recent_predictions,
-    get_risk_level_counts,
-    init_db,
-    save_prediction,
-)
 from app.model_utils import (  # noqa: E402
     DEFAULT_NUMERIC_RANGES,
     ModelNotFoundError,
@@ -59,14 +52,6 @@ LABELS = {
     "region": "Wilayah",
     "weather_condition": "Kondisi Cuaca",
 }
-
-
-@st.cache_resource(show_spinner=False)
-def ensure_db_ready() -> bool:
-    """Create the predictions table if a database is configured.
-    Cached so this only runs once per app process, not on every rerun."""
-    init_db()
-    return db_available()
 
 
 @st.cache_resource(show_spinner="Memuat model prediksi...")
@@ -143,12 +128,6 @@ def render_sidebar(config: dict) -> None:
         "akhir pengiriman."
     )
 
-    st.sidebar.divider()
-    if db_available():
-        st.sidebar.success("💾 Histori prediksi: aktif")
-    else:
-        st.sidebar.warning("💾 Histori prediksi: nonaktif (DB belum diset)")
-
 
 def render_form(pipeline) -> dict | None:
     options = get_options(pipeline)
@@ -222,36 +201,13 @@ def render_form(pipeline) -> dict | None:
     }
 
 
-def compute_and_store_result(pipeline, input_data: dict, history_enabled: bool) -> None:
-    """Run prediction for a freshly submitted form and persist it in
-    st.session_state, so the result survives Streamlit reruns (e.g. a
-    websocket reconnect) instead of disappearing after a few seconds."""
+def render_result(pipeline, input_data: dict) -> None:
     try:
         result = predict_delay(pipeline, input_data)
     except ValueError as exc:
-        st.session_state["last_error"] = str(exc)
-        st.session_state.pop("last_result", None)
+        st.error(f"Input tidak valid: {exc}")
         return
 
-    st.session_state.pop("last_error", None)
-    st.session_state["last_input"] = input_data
-    st.session_state["last_result"] = result
-
-    if history_enabled:
-        try:
-            save_prediction(input_data, result)
-            st.session_state["last_history_saved"] = True
-        except (
-            Exception
-        ) as exc:  # pragma: no cover - defensive, DB issues shouldn't break UI
-            st.session_state["last_history_saved"] = False
-            st.session_state["last_history_error"] = str(exc)
-    else:
-        st.session_state["last_history_saved"] = False
-        st.session_state.pop("last_history_error", None)
-
-
-def render_result(input_data: dict, result, history_enabled: bool) -> None:
     st.divider()
     st.subheader("📊 Hasil Prediksi")
 
@@ -295,20 +251,6 @@ def render_result(input_data: dict, result, history_enabled: bool) -> None:
     with st.expander("Lihat data input yang dikirim ke model"):
         st.dataframe(pd.DataFrame([input_data]), use_container_width=True)
 
-    if not history_enabled:
-        st.caption(
-            "ℹ️ Histori tidak aktif — database belum dikonfigurasi "
-            "(lihat tab 'Histori Prediksi')."
-        )
-    elif st.session_state.get("last_history_saved"):
-        st.caption("💾 Prediksi ini tersimpan ke histori.")
-    else:
-        history_error = st.session_state.get("last_history_error")
-        if history_error:
-            st.warning(
-                f"Prediksi berhasil, tapi gagal menyimpan ke histori: {history_error}"
-            )
-
 
 def render_feature_importance(pipeline) -> None:
     fi = get_feature_importance(pipeline, top_n=10)
@@ -320,54 +262,6 @@ def render_feature_importance(pipeline) -> None:
             "Menunjukkan fitur mana yang paling memengaruhi prediksi model "
             "secara umum (bukan spesifik untuk input di atas)."
         )
-
-
-def render_history() -> None:
-    st.subheader("📜 Histori Prediksi")
-
-    if not db_available():
-        st.info(
-            "Database belum dikonfigurasi. Di Railway: tambahkan service "
-            "**PostgreSQL** ke project ini (New → Database → Add PostgreSQL) "
-            "dan hubungkan variable `DATABASE_URL` ke service dashboard ini. "
-            "Setelah itu setiap prediksi baru akan otomatis tersimpan di sini."
-        )
-        return
-
-    col_refresh, col_limit = st.columns([1, 3])
-    with col_refresh:
-        refresh = st.button("🔄 Refresh", use_container_width=True)
-    with col_limit:
-        limit = st.slider("Jumlah data terbaru", 10, 200, 50, step=10)
-
-    if refresh:
-        st.cache_data.clear()
-
-    rows = _cached_get_recent_predictions(limit)
-    counts = _cached_get_risk_level_counts()
-
-    if not rows:
-        st.info("Belum ada histori prediksi. Coba buat prediksi baru di tab sebelah.")
-        return
-
-    if counts:
-        c1, c2, c3 = st.columns(3)
-        c1.metric("🟢 Risiko Rendah", counts.get("Low", 0))
-        c2.metric("🟡 Risiko Sedang", counts.get("Medium", 0))
-        c3.metric("🔴 Risiko Tinggi", counts.get("High", 0))
-
-    df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
-
-
-@st.cache_data(ttl=15, show_spinner=False)
-def _cached_get_recent_predictions(limit: int) -> list[dict]:
-    return get_recent_predictions(limit=limit)
-
-
-@st.cache_data(ttl=15, show_spinner=False)
-def _cached_get_risk_level_counts() -> dict[str, int]:
-    return get_risk_level_counts()
 
 
 def main() -> None:
@@ -390,32 +284,11 @@ def main() -> None:
     config = get_config()
     render_sidebar(config)
 
-    history_enabled = ensure_db_ready()
+    input_data = render_form(pipeline)
+    if input_data is not None:
+        render_result(pipeline, input_data)
 
-    tab_predict, tab_history = st.tabs(["🔮 Prediksi Baru", "📜 Histori Prediksi"])
-
-    with tab_predict:
-        input_data = render_form(pipeline)
-        if input_data is not None:
-            # Fresh form submission this run — compute and persist.
-            compute_and_store_result(pipeline, input_data, history_enabled)
-
-        # Always render from session_state (not just on the submit run),
-        # so the result survives Streamlit reruns (e.g. websocket reconnects)
-        # instead of vanishing after a few seconds.
-        if st.session_state.get("last_error"):
-            st.error(f"Input tidak valid: {st.session_state['last_error']}")
-        elif "last_result" in st.session_state:
-            render_result(
-                st.session_state["last_input"],
-                st.session_state["last_result"],
-                history_enabled,
-            )
-
-        render_feature_importance(pipeline)
-
-    with tab_history:
-        render_history()
+    render_feature_importance(pipeline)
 
 
 if __name__ == "__main__":
